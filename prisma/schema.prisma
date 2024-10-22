@@ -15,7 +15,7 @@ datasource db {
 
 model Buildings {
   id       Int   @id @default(autoincrement())
-  foto1    String  
+  foto1    String 
   foto2    String  
   foto3    String  
   foto4    String  
@@ -25,3 +25,4 @@ model Buildings {
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt
 }
+// 

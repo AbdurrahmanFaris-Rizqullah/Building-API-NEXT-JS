@@ -16,9 +16,7 @@ export const GET = async () => {
 
   // mengganti nama fungsi
   try {
-    const buildings = await prisma.buildings.findMany({
-      where: { published: true },
-    });
+    const buildings = await prisma.buildings.findMany();
     return NextResponse.json({
       message: "Daftar bangunan",
       data: buildings,
@@ -101,7 +99,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   try {
     const photoUrls = await Promise.all(
       Array.from(files).map(async (file) => {
-        const uploadResult = await cloudinary.v2.uploader.upload(file[1].stream(), {
+        const uploadResult = await cloudinary.v2.uploader.upload(file[1].st ream(), {
           folder: "your-folder-name", // Ganti dengan nama folder yang sesuai
         });
         return uploadResult.secure_url;
