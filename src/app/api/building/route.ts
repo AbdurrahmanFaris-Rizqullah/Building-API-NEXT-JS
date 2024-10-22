@@ -12,7 +12,8 @@ cloudinary.v2.config({
 
 const prisma = new PrismaClient();
 
-export async function getAllBuildings() {
+export const GET = async () => {
+
   // mengganti nama fungsi
   try {
     const buildings = await prisma.buildings.findMany({
@@ -27,25 +28,7 @@ export async function getAllBuildings() {
   }
 }
 
-export async function getBuildingById(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  try {
-    const building = await prisma.buildings.findUnique({
-      where: { id: Number(id) },
-    });
 
-    if (!building) {
-      return NextResponse.json({ msg: "Bangunan tidak ditemukan" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      message: `Bangunan dengan id ${id}`,
-      data: building,
-    });
-  } catch (error) {
-    return NextResponse.json({ msg: (error as Error).message }, { status: 500 });
-  }
-}
 
 // Membuat bangunan baru
 export async function POST(request: Request) {
