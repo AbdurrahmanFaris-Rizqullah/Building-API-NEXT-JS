@@ -26,57 +26,59 @@ export const GET = async () => {
   }
 }
 
-
-
-// Membuat bangunan baru
+    // Membuat bangunan baru
 export async function POST(request: Request) {
-  const { desc } = await request.json();
-  const files = await request.formData();
+  const { desc } = await request.json(); // Ambil deskripsi dari body
+  const files = await request.formData(); // Ambil data form
 
   try {
-    const photoUrls = await Promise.all(
-      Array.from(files).map(async (file) => {
-        const fileValue = file[1];
+const fileArray = files.getAll('foto');
 
-        if (fileValue instanceof File) {
+    const photoUrls = await Promise.all(
+      Array.from(fileArray).map(async (file) => {
+        
+        if (file instanceof File) {
           return new Promise<string>((resolve, reject) => {
             const uploadStream = cloudinary.v2.uploader.upload_stream(
               {
-                folder: 'your-folder-name',
+                folder: 'my-building',
               },
               (error, result) => {
                 if (result) {
-                  resolve(result.secure_url);
+                  resolve(result.secure_url); // Dapatkan URL gambar
                 } else {
-                  reject(error);
+                  reject(new Error(`Upload failed: ${error?.message}`)); // Tangani error jika upload gagal
                 }
               }
             );
 
-             // Menggunakan PassThrough untuk mengonversi ReadableStream ke Node.js stream
-             const passThrough = new PassThrough();
-             const readableStream = fileValue.stream(); // Ini adalah ReadableStream
- 
-             // Pipe dari ReadableStream ke PassThrough
-             readableStream.pipe(passThrough);
-             passThrough.pipe(uploadStream);
-           });
-         }
-         return null;
-       })
-     );
- 
-    
+            const passThrough = new PassThrough();
+            const readableStream = fileValue.stream(); // Ini adalah ReadableStream
+            
+            // Pipe dari ReadableStream ke PassThrough
+            readableStream.pipe(passThrough);
+            passThrough.pipe(uploadStream); // Pipe ke uploadStream Cloudinary
+          });
+        }
+        return null; // Jika bukan file, kembalikan null
+      })
+    );
+
+    // Filter photoUrls untuk menghindari null values
+    const validPhotoUrls = photoUrls.filter(url => url !== null);
+
+    // Simpan data bangunan ke database
     const result = await prisma.buildings.create({
       data: {
         desc,
-        foto1: photoUrls[0] || "",
-        foto2: photoUrls[1] || "",
-        foto3: photoUrls[2] || "",
-        foto4: photoUrls[3] || "",
-        foto5: photoUrls[4] || "",
+        foto1: validPhotoUrls[0] || "", // Simpan URL gambar ke database
+        foto2: validPhotoUrls[1] || "",
+        foto3: validPhotoUrls[2] || "",
+        foto4: validPhotoUrls[3] || "",
+        foto5: validPhotoUrls[4] || "",
       },
     });
+    
 
     return NextResponse.json(
       {
@@ -86,9 +88,16 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    return NextResponse.json({ msg: (error as Error).message }, { status: 500 });
+    console.error("Error occurred:", error); // Log error di server
+    return NextResponse.json(
+      {
+        msg: (error as Error).message || "Terjadi kesalahan tidak terduga", // Tampilkan pesan kesalahan
+      },
+      { status: 500 }
+    );
   }
 }
+
 
 // Memperbarui bangunan
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
