@@ -21,6 +21,7 @@ model Buildings {
   foto4    String  
   foto5    String  
   desc     String @db.Text
+  published   Boolean @default(false)
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt
 }
