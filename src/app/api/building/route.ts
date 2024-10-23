@@ -14,19 +14,40 @@ cloudinary.v2.config({
 });
 
 
+export const GET = async () => {
+  // mengganti nama fungsi
+  try {
+    const buildings = await prisma.buildings.findMany();
+    return NextResponse.json({
+      message: "Daftar bangunan",
+      data: buildings,
+    });
+  } catch (error) {
+    return NextResponse.json({ msg: (error as Error).message }, { status: 404 });
+  }
+};
+
+
+
 export async function POST(request: Request) {
   try {
-    const { desc } = await request.json(); // Ambil deskripsi dari body
-    const files = await request.formData(); // Ambil data form
+    console.log("Menerima request...");
+    
+    const formData = await request.formData(); // Ambil formData (untuk file dan deskripsi)
+    // console.log("Form data diterima:", formData);
+    
+    const desc = formData.get("desc")?.toString(); // Ambil deskripsi dari formData
+    console.log("Deskripsi diterima:", desc);
 
-    if (!desc || !files) {
-      throw { name: "invalid input" };
+    if (!desc || !formData) {
+      throw { name: "invalid input", message: "Deskripsi atau data form tidak ditemukan" };
     }
 
-    const fileArray = files.getAll("foto"); // Ambil semua file 'foto'
+    const fileArray = formData.getAll("foto"); // Ambil semua file 'foto'
+    console.log("File array:", fileArray);
 
     if (fileArray.length === 0) {
-      throw { name: "FileRequired" };
+      throw { name: "FileRequired", message: "Minimal satu file harus diupload" };
     }
 
     // Deklarasi photoUrls sebagai array string atau null
@@ -36,36 +57,48 @@ export async function POST(request: Request) {
       photoUrls = await Promise.all(
         Array.from(fileArray).map(async (file) => {
           if (file instanceof File) {
-            return new Promise<string>(async (resolve, reject) => {
-              // Ambil arrayBuffer dari file
-              const arrayBuffer = await file.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
+            console.log("Memproses file:", file.name);
 
-              // Gunakan Cloudinary uploader dengan buffer
-              cloudinary.v2.uploader.upload_stream(
-                { folder: "my-building" },
-                (error, result) => {
-                  if (error) {
-                    return reject(new Error(`Upload failed: ${error.message}`));
+            return new Promise<string>(async (resolve, reject) => {
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                console.log(`ArrayBuffer file ${file.name} diterima`, arrayBuffer);
+
+                const buffer = Buffer.from(arrayBuffer);
+                console.log("Buffer:", buffer);
+
+                // Upload ke Cloudinary
+                cloudinary.v2.uploader.upload_stream(
+                  { folder: "my-building" },
+                  (error, result) => {
+                    if (error) {
+                      console.error("Upload error:", error);
+                      return reject(new Error(`Upload failed: ${error.message}`));
+                    }
+                    if (result) {
+                      console.log(`Upload berhasil untuk file ${file.name}:`, result.secure_url);
+                      resolve(result.secure_url);
+                    }
                   }
-                  if (result) {
-                    resolve(result.secure_url); // Dapatkan URL gambar dari hasil upload
-                  }
-                }
-              ).end(buffer); // Kirim buffer ke Cloudinary
+                ).end(buffer);
+              } catch (uploadError) {
+                console.error("Error dalam proses upload:", uploadError);
+                reject(uploadError);
+              }
             });
           }
           return null; // Jika bukan file, kembalikan null
         })
       );
 
-      console.log("Upload successful", photoUrls);
+      console.log("Proses upload selesai:", photoUrls);
     } catch (error) {
-      console.error("Error during upload:", error);
+      console.error("Error selama proses upload:", error);
+      throw { name: "Upload failed", message: "Gagal mengupload file ke Cloudinary" };
     }
 
-    // Filter URL yang valid (tidak null)
     const validPhotoUrls = photoUrls.filter((url: string | null): url is string => url !== null);
+    console.log("Valid photo URLs:", validPhotoUrls);
 
     const result = await prisma.buildings.create({
       data: {
@@ -79,6 +112,8 @@ export async function POST(request: Request) {
       },
     });
 
+    console.log("Database insertion berhasil:", result);
+
     return NextResponse.json(
       {
         message: `Bangunan berhasil dibuat dengan deskripsi: ${desc}`,
@@ -87,10 +122,12 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    const { status, message } = errorHandler(error); // Gunakan errorHandler untuk menangani error
+    console.error("Error terdeteksi:", error);
+    const { status, message } = errorHandler(error);
     return NextResponse.json({ msg: message }, { status });
   }
 }
+
 
 
 
@@ -166,3 +203,4 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     return NextResponse.json({ msg: (error as Error).message }, { status: 400 });
   }
 }
+
