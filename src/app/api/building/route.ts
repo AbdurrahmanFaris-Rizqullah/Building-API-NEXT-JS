@@ -23,43 +23,50 @@ export async function POST(request: Request) {
       throw { name: "invalid input" };
     }
 
-    const fileArray = files.getAll("foto"); // Ambil file 'foto'
-    
+    const fileArray = files.getAll("foto"); // Ambil semua file 'foto'
+
     if (fileArray.length === 0) {
       throw { name: "FileRequired" };
     }
 
-    // Upload ke Cloudinary
-    const photoUrls = await Promise.all(
-      fileArray.map(async (file) => {
-        if (file instanceof File) {
-          return new Promise<string>((resolve, reject) => {
-            const uploadStream = cloudinary.v2.uploader.upload_stream(
-              { folder: "my-building" },
-              (error, result) => {
-                if (error) {
-                  return reject(new Error(`Upload failed: ${error.message}`));
+    // Deklarasi photoUrls sebagai array string atau null
+    let photoUrls: (string | null)[] = [];
+
+    try {
+      photoUrls = await Promise.all(
+        Array.from(fileArray).map(async (file) => {
+          if (file instanceof File) {
+            return new Promise<string>(async (resolve, reject) => {
+              // Ambil arrayBuffer dari file
+              const arrayBuffer = await file.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+
+              // Gunakan Cloudinary uploader dengan buffer
+              cloudinary.v2.uploader.upload_stream(
+                { folder: "my-building" },
+                (error, result) => {
+                  if (error) {
+                    return reject(new Error(`Upload failed: ${error.message}`));
+                  }
+                  if (result) {
+                    resolve(result.secure_url); // Dapatkan URL gambar dari hasil upload
+                  }
                 }
-                if (result) {
-                  resolve(result.secure_url); // Dapatkan URL gambar dari hasil upload
-                }
-              }
-            );
+              ).end(buffer); // Kirim buffer ke Cloudinary
+            });
+          }
+          return null; // Jika bukan file, kembalikan null
+        })
+      );
 
-            // Piping stream dari file ke Cloudinary
-            const passThrough = new PassThrough();
-            const readableStream = file.stream();
-            readableStream.pipe(passThrough);
-            passThrough.pipe(uploadStream); // Pipe ke Cloudinary
-          });
-        }
-        return null; // Jika bukan file, return null
-      })
-    );
+      console.log("Upload successful", photoUrls);
+    } catch (error) {
+      console.error("Error during upload:", error);
+    }
 
-    const validPhotoUrls = photoUrls.filter((url) => url !== null); // Ambil URL yang valid
+    // Filter URL yang valid (tidak null)
+    const validPhotoUrls = photoUrls.filter((url: string | null): url is string => url !== null);
 
-    // Menyimpan data ke database
     const result = await prisma.buildings.create({
       data: {
         desc,
@@ -68,7 +75,7 @@ export async function POST(request: Request) {
         foto3: validPhotoUrls[2] || "",
         foto4: validPhotoUrls[3] || "",
         foto5: validPhotoUrls[4] || "",
-        published: true, // Set default published ke true
+        published: true, // Set default to true
       },
     });
 
@@ -84,6 +91,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ msg: message }, { status });
   }
 }
+
+
 
 // Memperbarui bangunan
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
