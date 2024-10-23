@@ -17,7 +17,7 @@ export function errorHandler(error: any) {
         break;
       default:
         status = 500;
-        message = 'ANJING ERROR GK JELAS';
+        message = 'ERROR 500, ANJING ERROR GK JELAS';
         break;
     }
   
