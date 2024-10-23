@@ -133,20 +133,48 @@ export async function POST(request: Request) {
 
 // Memperbarui bangunan
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-  const { desc } = await request.json();
-  const files = await request.formData();
-
   try {
+    const { id } = params;
+    const { desc } = await request.json();
+    const files = await request.formData();
+
+    // Cek apakah ada deskripsi atau file
+    if (!desc || !files) {
+      throw { name: "invalid input" };
+    }
+
+    const fileArray = files.getAll("foto"); // Ambil semua file 'foto'
+
+    // Cek apakah ada file yang diupload
+    if (fileArray.length === 0) {
+      throw { name: "FileRequired" };
+    }
+
+    // Proses upload foto ke Cloudinary
     const photoUrls = await Promise.all(
-      Array.from(files).map(async (file) => {
-        const uploadResult = await cloudinary.v2.uploader.upload(file[1].stream(), {
-          folder: "my-building", // Ganti dengan nama folder yang sesuai
+      Array.from(fileArray).map(async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        const uploadResult = await new Promise<string>((resolve, reject) => {
+          cloudinary.v2.uploader.upload_stream(
+            { folder: "my-building" },
+            (error, result) => {
+              if (error) {
+                return reject(new Error(`Gagal mengupload file: ${error.message}`));
+              }
+              if (result) {
+                resolve(result.secure_url);
+              }
+            }
+          ).end(buffer);
         });
-        return uploadResult.secure_url;
+
+        return uploadResult;
       })
     );
 
+    // Update data bangunan
     const updatedBuilding = await prisma.buildings.update({
       where: { id: Number(id) },
       data: {
@@ -164,21 +192,23 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       data: updatedBuilding,
     });
   } catch (error) {
-    return NextResponse.json({ msg: (error as Error).message }, { status: 400 });
+    const { status, message } = errorHandler(error);
+    return NextResponse.json({ msg: message }, { status });
   }
 }
 
+
 // Menghapus bangunan
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
-
   try {
+    const { id } = params;
+
     const building = await prisma.buildings.findUnique({
       where: { id: Number(id) },
     });
 
     if (!building) {
-      return NextResponse.json({ msg: "Bangunan tidak ditemukan" }, { status: 404 });
+      throw { name: "BuildingNotFound" };
     }
 
     // Hapus foto dari Cloudinary (opsional)
@@ -191,6 +221,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       })
     );
 
+    // Hapus bangunan dari database
     const deletedBuilding = await prisma.buildings.delete({
       where: { id: Number(id) },
     });
@@ -200,7 +231,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       data: deletedBuilding,
     });
   } catch (error) {
-    return NextResponse.json({ msg: (error as Error).message }, { status: 400 });
+    const { status, message } = errorHandler(error);
+    return NextResponse.json({ msg: message }, { status });
   }
 }
+
 
